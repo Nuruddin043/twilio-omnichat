@@ -78,7 +78,7 @@ async function findOrCreateContact(msisdn) {
 /* ─── WhatsApp template broadcast ───────────────────────────────────── */
 async function sendWhatsApp(contactId) {
     const bearer = await getBearer();
-    await axios.post(
+    const msgdata=await axios.post(
         `${OMNI_BASE}/broadcast`,
         {
             apiAccountId: OMNI_API_ACCOUNT_ID,
@@ -88,6 +88,7 @@ async function sendWhatsApp(contactId) {
         },
         { headers: { Authorization: `Bearer ${bearer}` } }
     );
+    console.log('msgdata',msgdata.data)
 }
 /* ── express app ── */
 const app = express();
