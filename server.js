@@ -43,24 +43,36 @@ async function findOrCreateContact(msisdn) {
     const bearer = await getBearer();
 
     /* 1 – lookup */
-    const look = await axios.get(`${OMNI_BASE}/contact`, {
-        params: { apiAccountId: OMNI_API_ACCOUNT_ID, mobileNumber: msisdn },
-        headers: { Authorization: `Bearer ${bearer}` }
-    });
-    if (look.data.items?.length) return look.data.items[0].contactId;
+    try {
+        const look = await axios.get(`${OMNI_BASE}/contact`, {
+            params: { apiAccountId: OMNI_API_ACCOUNT_ID, mobileNumber: msisdn },
+            headers: { Authorization: `Bearer ${bearer}` }
+        });
+        if (look.data.items?.length) return look.data.items[0].contactId;
+    } catch (e) {
+        console.log(e.response.data);
+    }
 
-    /* 2 – create Presubscribed contact */
-    const create = await axios.post(
-        `${OMNI_BASE}/contact`,
-        {
-            mobileNumber: msisdn,
-            name: msisdn,
-            status: 'Presubscribed',
-            apiAccountId: OMNI_API_ACCOUNT_ID
-        },
-        { headers: { Authorization: `Bearer ${bearer}` } }
-    );
-    return create.data.contactId;
+
+    try {
+        /* 2 – create Presubscribed contact */
+        const create = await axios.post(
+            `${OMNI_BASE}/contact`,
+            {
+                mobileNumber: msisdn,
+                name: msisdn,
+                status: 'Presubscribed',
+                apiAccountId: OMNI_API_ACCOUNT_ID
+            },
+            { headers: { Authorization: `Bearer ${bearer}` } }
+        );
+        console.log('account created',create.data)
+        return create.data.contactId;
+    } catch (e) {
+        console.log(e.response.data);
+        return null;
+    }
+
 }
 
 /* ─── WhatsApp template broadcast ───────────────────────────────────── */
@@ -101,9 +113,14 @@ app.post(
         /* B. fire WhatsApp in background */
         try {
             const contactId = await findOrCreateContact(caller);
-            console.log('contactId', contactId);
-            await sendWhatsApp(contactId);
-            console.log('WhatsApp template sent →', caller);
+            if(contactId){
+                console.log('contactId', contactId);
+                await sendWhatsApp(contactId);
+                console.log('WhatsApp template sent →', caller);
+            }else{
+                console.log('Contact not created, no WhatsApp sent →');
+            }
+
         } catch (err) {
             console.error('OmniChat error', err.response?.data || err.message);
         }
