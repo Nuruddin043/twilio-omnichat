@@ -88,8 +88,6 @@ async function sendWhatsApp(contactId, message = '') {
 
 /* ── express app ── */
 const app = express();
-app.use(express.urlencoded({ extended: false })); // Twilio posts url-encoded
-app.use(express.json());
 
 /* validate Twilio signature */
 const validate = twilio.webhook({ validate: true, authToken: TWILIO_AUTH_TOKEN });
@@ -114,6 +112,11 @@ app.post('/twilio/voice', validate, async (req, res) => {
         console.error('OmniChat error', err.response?.data || err.message);
     }
 });
+
+
+app.use(express.urlencoded({ extended: false })); // Twilio posts url-encoded
+app.use(express.json());
+
 
 app.get('/', (_, res) => res.send('OK'));
 app.listen(PORT, () => console.log(`🚀 Listening on :${PORT}`));
