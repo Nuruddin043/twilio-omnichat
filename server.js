@@ -2,6 +2,8 @@ import express from 'express';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import twilio from 'twilio';
+import morgan  from 'morgan';
+
 const { twiml } = twilio;
 dotenv.config();
 
@@ -81,9 +83,18 @@ const app = express();
 /* 1️⃣  Honour X-Forwarded-Proto so req.protocol === 'https' */
 app.set('trust proxy', true);
 
+/* Custom morgan format */
+morgan.token('real-ip', (req) => req.ip || req.headers['x-forwarded-for'] || '-');
+app.use(
+  morgan(
+    ':real-ip │ :method :url │ :status │ :response-time ms │ :res[content-length]b │ ":user-agent"'
+  )
+);
+
+//  express.raw({ type: 'application/x-www-form-urlencoded' }),
 app.post(
     '/twilio/voice',
-    express.raw({ type: 'application/x-www-form-urlencoded' }),
+   
     twilio.webhook(TWILIO_AUTH_TOKEN, { validate: true, protocol: 'https' }),
     async (req, res) => {
         const params = new URLSearchParams(req.body.toString());
