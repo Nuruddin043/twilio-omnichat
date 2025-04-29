@@ -76,20 +76,34 @@ async function findOrCreateContact(msisdn) {
 }
 
 /* ─── WhatsApp template broadcast ───────────────────────────────────── */
-async function sendWhatsApp(contactId) {
+async function sendWhatsApp(contactId, values = []) {
     const bearer = await getBearer();
-    const msgdata=await axios.post(
-        `${OMNI_BASE}/broadcast`,
-        {
-            apiAccountId: OMNI_API_ACCOUNT_ID,
-            contactId,
-            templateId: OMNI_TEMPLATE_ID,
-            message: ''
-        },
-        { headers: { Authorization: `Bearer ${bearer}` } }
+  
+    const { data: tpl } = await axios.get(
+      `${OMNI_BASE}/template/${OMNI_TEMPLATE_ID}`,
+      { headers: { Authorization: `Bearer ${bearer}` } }
     );
-    console.log('msgdata',msgdata.data)
-}
+
+    /* 2️⃣  Replace placeholders with supplied values */
+    let finalMessage = tpl.templateText.replace(/{{\s*(\d+)\s*}}/g, (_, n) => {
+      const idx = Number(n) - 1;          // {{1}} = values[0]
+      return idx in values ? values[idx] : '';
+    });
+  
+    /* 3️⃣  Send broadcast with the generated text  */
+    const { data } = await axios.post(
+      `${OMNI_BASE}/broadcast`,
+      {
+        apiAccountId: OMNI_API_ACCOUNT_ID,
+        contactId,
+        templateId : OMNI_TEMPLATE_ID,
+        message    : finalMessage
+      },
+      { headers: { Authorization: `Bearer ${bearer}` } }
+    );
+  
+    console.log('🟢 Broadcast queued – ID:', data.broadcastId,);
+  }
 /* ── express app ── */
 const app = express();
 
