@@ -44,8 +44,8 @@ async function findOrCreateContact(msisdn) {
 
     /* 1 – lookup */
     try {
-        const look = await axios.get(`${OMNI_BASE}/contact`, {
-            params: { apiAccountId: OMNI_API_ACCOUNT_ID, mobileNumber: msisdn },
+        console.log(msisdn)
+        const look = await axios.get(`${OMNI_BASE}/contact?apiAccountId=${OMNI_API_ACCOUNT_ID}&mobileNumber=${msisdn}`, {
             headers: { Authorization: `Bearer ${bearer}` }
         });
         if (look.data.items?.length) return look.data.items[0].contactId;
