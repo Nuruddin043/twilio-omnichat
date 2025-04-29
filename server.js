@@ -37,82 +37,75 @@ async function getBearer() {
     return token;
 }
 
-/* ── contact helpers ── */
-async function findContactByMobile(mobile) {
+async function findOrCreateContact(msisdn) {
     const bearer = await getBearer();
 
-    const { data } = await axios.get(
+    /* 1 – lookup */
+    const look = await axios.get(`${OMNI_BASE}/contact`, {
+        params: { apiAccountId: OMNI_API_ACCOUNT_ID, mobileNumber: msisdn },
+        headers: { Authorization: `Bearer ${bearer}` }
+    });
+    if (look.data.items?.length) return look.data.items[0].contactId;
+
+    /* 2 – create Presubscribed contact */
+    const create = await axios.post(
         `${OMNI_BASE}/contact`,
         {
-            params: {
-                apiAccountId: OMNI_API_ACCOUNT_ID,
-                mobileNumber: mobile                  // filter by UK E.164 number :contentReference[oaicite:1]{index=1}
-            },
-            headers: { Authorization: `Bearer ${bearer}` }
-        }
-    );
-    return data.items?.[0];                    // undefined if not found
-}
-
-async function createContact(mobile) {
-    const bearer = await getBearer();
-
-    const { data } = await axios.post(
-        `${OMNI_BASE}/contact`,
-        {
-            mobileNumber: mobile,
-            name: mobile,
+            mobileNumber: msisdn,
+            name: msisdn,
             status: 'Presubscribed',
             apiAccountId: OMNI_API_ACCOUNT_ID
         },
         { headers: { Authorization: `Bearer ${bearer}` } }
-    );                                         // :contentReference[oaicite:2]{index=2}
-    return data;
+    );
+    return create.data.contactId;
 }
 
-/* ── broadcast helper ── */
-async function sendWhatsApp(contactId, message = '') {
+/* ─── WhatsApp template broadcast ───────────────────────────────────── */
+async function sendWhatsApp(contactId) {
     const bearer = await getBearer();
-
     await axios.post(
         `${OMNI_BASE}/broadcast`,
         {
             apiAccountId: OMNI_API_ACCOUNT_ID,
             contactId,
             templateId: OMNI_TEMPLATE_ID,
-            message: message                   // placeholders already substituted if any
+            message: ''
         },
         { headers: { Authorization: `Bearer ${bearer}` } }
-    );                                         // :contentReference[oaicite:3]{index=3}
+    );
 }
-
 /* ── express app ── */
 const app = express();
 
-/* validate Twilio signature */
-const validate = twilio.webhook({ validate: true, authToken: TWILIO_AUTH_TOKEN });
+/* 1️⃣  Honour X-Forwarded-Proto so req.protocol === 'https' */
+app.set('trust proxy', true);
 
-app.post('/twilio/voice', validate, async (req, res) => {
-    const caller = req.body.From;              // E.164 (+447…)
-    console.log(`Incoming call from ${caller}`);
+app.post(
+    '/twilio/voice',
+    express.raw({ type: 'application/x-www-form-urlencoded' }),
+    twilio.webhook(TWILIO_AUTH_TOKEN, { validate: true, protocol: 'https' }),
+    async (req, res) => {
+        const params = new URLSearchParams(req.body.toString());
+        const caller = params.get('From');               // +447…
+        console.log('Incoming call from', caller);
 
-    /* 1️⃣ Hang up immediately */
-    const vr = new twiml.VoiceResponse();
-    vr.hangup();
-    res.type('text/xml').send(vr.toString());
+        /* A. respond instantly with <Hangup/> */
+        const vr = new twiml.VoiceResponse();
+        vr.hangup();
+        res.type('text/xml').send(vr.toString());
 
-    /* 2️⃣ Background OmniChat flow */
-    try {
-        let contact = await findContactByMobile(caller);
-        if (!contact) contact = await createContact(caller);
-
-        await sendWhatsApp(contact.contactId, '');
-        console.log(`WhatsApp broadcast sent → ${caller}`);
-    } catch (err) {
-        console.error('OmniChat error', err.response?.data || err.message);
+        /* B. fire WhatsApp in background */
+        try {
+            const contactId = await findOrCreateContact(caller);
+            console.log('contactId', contactId);
+            await sendWhatsApp(contactId);
+            console.log('WhatsApp template sent →', caller);
+        } catch (err) {
+            console.error('OmniChat error', err.response?.data || err.message);
+        }
     }
-});
-
+);
 
 app.use(express.urlencoded({ extended: false })); // Twilio posts url-encoded
 app.use(express.json());
